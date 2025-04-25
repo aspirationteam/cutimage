@@ -11,13 +11,14 @@
 - 可调整的颜色容差和边框填充
 - 自定义种子点位置
 - 生成调试图像以供参考
+- 可视化显示和保存处理过程
 
 ## 安装依赖
 
 确保已安装Python 3.6+，然后安装所需依赖：
 
 ```bash
-pip install opencv-python numpy pillow
+pip install opencv-python numpy pillow matplotlib
 ```
 
 ## 使用方法
@@ -38,6 +39,7 @@ python cutimage.py
 ```
 用法: cutimage.py [-h] [-i INPUT] [-o OUTPUT] [-t TOLERANCE] [-p PADDING] [-s SEED] [-f FILE] 
                   [--no-debug] [--no-canny] [--canny-t1 CANNY_T1] [--canny-t2 CANNY_T2]
+                  [--show-figure] [--save-figure]
 
 从T恤或其他图像中提取设计图案
 
@@ -57,6 +59,8 @@ python cutimage.py
   --no-canny            不使用Canny边缘检测
   --canny-t1 CANNY_T1   Canny边缘检测第一阈值，默认为 50
   --canny-t2 CANNY_T2   Canny边缘检测第二阈值，默认为 150
+  --show-figure         显示处理过程图像
+  --save-figure         保存处理过程图像
 ```
 
 ### 示例
@@ -91,6 +95,21 @@ python cutimage.py --canny-t1 50 --canny-t2 150
 python cutimage.py --no-canny
 ```
 
+显示处理过程的可视化图像：
+```bash
+python cutimage.py --show-figure
+```
+
+保存处理过程的可视化图像：
+```bash
+python cutimage.py --save-figure
+```
+
+同时显示和保存处理过程图像：
+```bash
+python cutimage.py --show-figure --save-figure
+```
+
 ## 工作原理
 
 该程序使用三种算法来识别图像中的图案，按优先顺序尝试：
@@ -115,8 +134,9 @@ python cutimage.py --no-canny
 3. 查找最大轮廓并确定边界框
 4. 添加适当的填充并裁剪图像
 
-## 调试信息
+## 可视化与调试
 
+### 调试图像
 程序会在`output/debug`目录中生成调试图像，包括：
 
 - `debug_*.jpg`：显示绿色矩形边框和红色种子点
@@ -125,6 +145,16 @@ python cutimage.py --no-canny
 - `contours_*.jpg`：轮廓检测结果
 - `segments_*.jpg`：颜色分割结果可视化
 - `best_segment_*.jpg`：选中的最佳颜色分割区域
+
+### 处理过程可视化
+使用`--show-figure`参数可以显示处理过程的图像，包括：
+- 原图
+- 颜色分割结果
+- 最佳分割区域
+- 边界识别结果
+- 最终裁剪结果
+
+使用`--save-figure`参数可以将这些可视化图像保存到`output/figures`目录。
 
 ## 故障排除
 

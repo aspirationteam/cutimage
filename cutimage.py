@@ -4,6 +4,8 @@ from PIL import Image
 import os
 import sys
 import argparse
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 
 # 默认配置
 INPUT_DIR = "input"
@@ -20,7 +22,7 @@ CANNY_THRESHOLD2 = 150
 
 def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR_TOLERANCE, 
                          padding_percent=DEFAULT_PADDING_PERCENT, seed_point=None, debug=True,
-                         use_canny=True):
+                         use_canny=True, show_figure=False, save_figure=False):
     """
     从T恤图像中提取设计图案
     
@@ -32,6 +34,8 @@ def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR
         seed_point: 自定义种子点 (x, y)，如果为None则自动选择
         debug: 是否生成调试图像
         use_canny: 是否使用Canny边缘检测辅助识别
+        show_figure: 是否显示处理过程图像
+        save_figure: 是否保存处理过程图像
     
     返回:
         是否成功提取
@@ -55,6 +59,11 @@ def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR
     if debug:
         debug_dir = os.path.join(OUTPUT_DIR, "debug")
         os.makedirs(debug_dir, exist_ok=True)
+    
+    # 创建存储所有处理过程的图像字典
+    process_images = {
+        '原图': cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    }
     
     # 尝试使用颜色分割算法
     print("  使用颜色分割算法...")
@@ -82,6 +91,7 @@ def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR
         
         vis_path = os.path.join(debug_dir, f"segments_{os.path.basename(input_path)}")
         cv2.imwrite(vis_path, visualized)
+        process_images['颜色分割'] = cv2.cvtColor(visualized, cv2.COLOR_BGR2RGB)
     
     # 分析每个分割区域的位置和大小
     # 优先查找中心区域的彩色部分
@@ -156,10 +166,12 @@ def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR
         # 如果请求了Canny边缘检测，尝试使用它
         if use_canny:
             print("  尝试使用Canny边缘检测...")
-            return use_canny_detection(img, output_path, padding_percent, debug)
+            return use_canny_detection(img, output_path, padding_percent, debug, 
+                                       process_images, show_figure, save_figure)
         else:
             print("  尝试使用洪水填充算法...")
-            return use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_point, debug)
+            return use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_point, debug,
+                                  process_images, show_figure, save_figure)
     
     # 按色差和集中度的加权和排序
     weighted_segments = [(i, pixels, conc * 0.3 + (diff / 255) * 0.7) 
@@ -174,6 +186,7 @@ def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR
         # 保存最佳分割掩码
         mask_path = os.path.join(debug_dir, f"best_segment_{os.path.basename(input_path)}")
         cv2.imwrite(mask_path, best_mask)
+        process_images['最佳分割'] = best_mask
     
     # 应用形态学操作清理掩码
     kernel = np.ones((5, 5), np.uint8)
@@ -188,10 +201,12 @@ def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR
         # 如果请求了Canny边缘检测，尝试使用它
         if use_canny:
             print("  尝试使用Canny边缘检测...")
-            return use_canny_detection(img, output_path, padding_percent, debug)
+            return use_canny_detection(img, output_path, padding_percent, debug,
+                                       process_images, show_figure, save_figure)
         else:
             print("  尝试使用洪水填充算法...")
-            return use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_point, debug)
+            return use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_point, debug,
+                                  process_images, show_figure, save_figure)
     
     # 找到最大的轮廓
     largest_contour = max(contours, key=cv2.contourArea)
@@ -206,10 +221,12 @@ def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR
         # 如果请求了Canny边缘检测，尝试使用它
         if use_canny:
             print("  尝试使用Canny边缘检测...")
-            return use_canny_detection(img, output_path, padding_percent, debug)
+            return use_canny_detection(img, output_path, padding_percent, debug,
+                                       process_images, show_figure, save_figure)
         else:
             print("  尝试使用洪水填充算法...")
-            return use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_point, debug)
+            return use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_point, debug,
+                                  process_images, show_figure, save_figure)
     
     # 添加填充
     padding_x = int(w * padding_percent)
@@ -226,18 +243,26 @@ def extract_tshirt_design(input_path, output_path, color_tolerance=DEFAULT_COLOR
         cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)  # 绿色矩形
         debug_path = os.path.join(debug_dir, f"debug_{os.path.basename(input_path)}")
         cv2.imwrite(debug_path, debug_img)
+        process_images['边界识别'] = cv2.cvtColor(debug_img, cv2.COLOR_BGR2RGB)
     
     # 裁剪图像
     cropped = img[y1:y2, x1:x2]
     
     # 保存结果
     cv2.imwrite(output_path, cropped)
+    process_images['裁剪结果'] = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+    
     print(f"  成功提取设计并保存到: {output_path}")
     print(f"  裁剪尺寸: {x2-x1}x{y2-y1} 像素")
     
+    # 显示或保存处理过程的图像
+    if show_figure or save_figure:
+        visualize_process(process_images, os.path.basename(input_path), save_figure)
+    
     return True
 
-def use_canny_detection(img, output_path, padding_percent, debug=True):
+def use_canny_detection(img, output_path, padding_percent, debug=True, 
+                        process_images=None, show_figure=False, save_figure=False):
     """使用Canny边缘检测算法"""
     height, width = img.shape[:2]
     
@@ -259,6 +284,7 @@ def use_canny_detection(img, output_path, padding_percent, debug=True):
         # 保存增强后的图像
         enhanced_path = os.path.join(debug_dir, f"enhanced_{os.path.basename(output_path)}")
         cv2.imwrite(enhanced_path, enhanced)
+        process_images['增强后'] = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
     
     # 应用Canny边缘检测
     edges = cv2.Canny(enhanced, CANNY_THRESHOLD1, CANNY_THRESHOLD2)
@@ -270,6 +296,7 @@ def use_canny_detection(img, output_path, padding_percent, debug=True):
         # 保存边缘检测结果
         edges_path = os.path.join(debug_dir, f"edges_{os.path.basename(output_path)}")
         cv2.imwrite(edges_path, dilated_edges)
+        process_images['边缘检测'] = cv2.cvtColor(dilated_edges, cv2.COLOR_BGR2RGB)
     
     # 寻找轮廓
     contours, _ = cv2.findContours(dilated_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -297,6 +324,7 @@ def use_canny_detection(img, output_path, padding_percent, debug=True):
             cv2.line(grid_img, (0, center_bottom), (width, center_bottom), (0, 255, 255), 1)
             grid_path = os.path.join(debug_dir, f"grid_{os.path.basename(output_path)}")
             cv2.imwrite(grid_path, grid_img)
+            process_images['网格'] = cv2.cvtColor(grid_img, cv2.COLOR_BGR2RGB)
         
         # 过滤小轮廓并优先选择中心区域的轮廓
         min_contour_area = width * height * 0.005  # 最小轮廓面积为图像的0.5%
@@ -328,6 +356,7 @@ def use_canny_detection(img, output_path, padding_percent, debug=True):
             cv2.drawContours(contour_img, sorted_contours, -1, (0, 255, 0), 2)
             contour_path = os.path.join(debug_dir, f"contours_{os.path.basename(output_path)}")
             cv2.imwrite(contour_path, contour_img)
+            process_images['轮廓'] = cv2.cvtColor(contour_img, cv2.COLOR_BGR2RGB)
         
         # 如果找到轮廓
         if sorted_contours:
@@ -344,6 +373,7 @@ def use_canny_detection(img, output_path, padding_percent, debug=True):
                 # 保存掩码
                 mask_path = os.path.join(debug_dir, f"mask_{os.path.basename(output_path)}")
                 cv2.imwrite(mask_path, mask)
+                process_images['掩码'] = mask
             
             # 查找掩码的外轮廓
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -375,12 +405,15 @@ def use_canny_detection(img, output_path, padding_percent, debug=True):
                         cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)  # 绿色矩形
                         debug_path = os.path.join(debug_dir, f"debug_{os.path.basename(output_path)}")
                         cv2.imwrite(debug_path, debug_img)
+                        process_images['边界框'] = cv2.cvtColor(debug_img, cv2.COLOR_BGR2RGB)
                     
                     # 裁剪图像
                     cropped = img[y1:y2, x1:x2]
                     
                     # 保存结果
                     cv2.imwrite(output_path, cropped)
+                    process_images['裁剪结果'] = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+                    
                     print(f"  成功提取设计并保存到: {output_path}")
                     print(f"  裁剪尺寸: {x2-x1}x{y2-y1} 像素")
                     
@@ -388,7 +421,8 @@ def use_canny_detection(img, output_path, padding_percent, debug=True):
     
     return False
 
-def use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_point, debug=True):
+def use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_point, debug=True,
+                  process_images=None, show_figure=False, save_figure=False):
     """使用洪水填充算法"""
     height, width = img.shape[:2]
     
@@ -449,6 +483,7 @@ def use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_poin
         # 保存填充掩码
         mask_path = os.path.join(debug_dir, f"mask_{os.path.basename(output_path)}")
         cv2.imwrite(mask_path, fill_mask)
+        process_images['掩码'] = fill_mask
     
     # 查找填充区域的轮廓
     contours, _ = cv2.findContours(fill_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -504,16 +539,87 @@ def use_flood_fill(img, output_path, color_tolerance, padding_percent, seed_poin
         
         debug_path = os.path.join(debug_dir, f"debug_{os.path.basename(output_path)}")
         cv2.imwrite(debug_path, debug_img)
+        process_images['边界框'] = cv2.cvtColor(debug_img, cv2.COLOR_BGR2RGB)
     
     # 裁剪图像
     cropped = img[y1:y2, x1:x2]
     
     # 保存结果
     cv2.imwrite(output_path, cropped)
+    process_images['裁剪结果'] = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+    
     print(f"  成功提取设计并保存到: {output_path}")
     print(f"  裁剪尺寸: {x2-x1}x{y2-y1} 像素")
     
     return True
+
+def visualize_process(images, image_name, save=False):
+    """
+    可视化处理过程
+    
+    参数:
+        images: 包含处理过程中各个图像的字典
+        image_name: 原图像名称
+        save: 是否保存图像
+    """
+    # 英文标题映射
+    title_map = {
+        '原图': 'Original Image',
+        '颜色分割': 'Color Segmentation',
+        '最佳分割': 'Best Segment',
+        '增强后': 'Enhanced Image',
+        '边缘检测': 'Edge Detection',
+        '掩码': 'Mask',
+        '网格': 'Grid',
+        '轮廓': 'Contours',
+        '边界识别': 'Boundary Detection',
+        '边界框': 'Bounding Box',
+        '裁剪结果': 'Cropped Result'
+    }
+    
+    # 确定需要的行数和列数
+    n_images = len(images)
+    if n_images <= 3:
+        rows, cols = 1, n_images
+    elif n_images <= 6:
+        rows, cols = 2, 3
+    else:
+        rows, cols = (n_images + 2) // 3, 3
+    
+    # 创建图形
+    plt.figure(figsize=(15, 5 * rows))
+    plt.suptitle(f"Image Processing Steps: {image_name}", fontsize=16)
+    
+    # 使用GridSpec更好地控制布局
+    gs = GridSpec(rows, cols, figure=plt.gcf())
+    
+    # 绘制所有图像
+    for i, (title, img) in enumerate(images.items()):
+        row, col = i // cols, i % cols
+        ax = plt.subplot(gs[row, col])
+        
+        # 根据图像类型显示
+        if len(img.shape) == 2:  # 灰度图像
+            ax.imshow(img, cmap='gray')
+        else:  # 彩色图像
+            ax.imshow(img)
+        
+        # 使用英文标题
+        eng_title = title_map.get(title, title)
+        ax.set_title(eng_title)
+        ax.axis('on')  # 显示坐标轴
+    
+    plt.tight_layout()
+    
+    # 保存图形
+    if save:
+        save_dir = os.path.join(OUTPUT_DIR, "figures")
+        os.makedirs(save_dir, exist_ok=True)
+        plt.savefig(os.path.join(save_dir, f"process_{image_name}"), dpi=150)
+        print(f"  已保存处理过程图像到: {os.path.join(save_dir, f'process_{image_name}')}")
+    
+    # 显示图形
+    plt.show()
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='从T恤或其他图像中提取设计图案')
@@ -538,6 +644,10 @@ def parse_arguments():
                         help=f'Canny边缘检测第一阈值，默认为 {CANNY_THRESHOLD1}')
     parser.add_argument('--canny-t2', type=int, default=CANNY_THRESHOLD2,
                         help=f'Canny边缘检测第二阈值，默认为 {CANNY_THRESHOLD2}')
+    parser.add_argument('--show-figure', action='store_true',
+                        help='显示处理过程图像')
+    parser.add_argument('--save-figure', action='store_true',
+                        help='保存处理过程图像')
     
     return parser.parse_args()
 
@@ -584,7 +694,7 @@ def main():
         if extract_tshirt_design(args.file, output_path, 
                                args.tolerance, args.padding, 
                                seed_point, not args.no_debug,
-                               not args.no_canny):
+                               not args.no_canny, args.show_figure, args.save_figure):
             processed += 1
         else:
             failed += 1
@@ -609,7 +719,7 @@ def main():
                 if extract_tshirt_design(input_path, output_path, 
                                        args.tolerance, args.padding, 
                                        seed_point, not args.no_debug,
-                                       not args.no_canny):
+                                       not args.no_canny, args.show_figure, args.save_figure):
                     processed += 1
                 else:
                     failed += 1
