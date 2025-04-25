@@ -1,0 +1,57 @@
+# Python字节码文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境
+xeonpcvenv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 输出目录
+output/
+
+# 输入图像 (可选，取决于你是否想要版本控制输入图像)
+# input/
+
+# 分发/打包
+dist/
+build/
+*.egg-info/
+
+# 单元测试/覆盖率报告
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# IDE文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 操作系统生成的文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 日志文件
+*.log 
